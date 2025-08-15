@@ -1,0 +1,139 @@
+
+openapi: 3.0.3
+info:
+  title: Fanta Optimizer TS API
+  version: "1.2.0"
+  description: REST API per ottimizzare la rosa del Fantacalcio con vincoli di budget, reparto, titolarità, preferenze, giocatori già aggiudicati e redistribuzione proporzionale.
+servers:
+  - url: http://localhost:3000
+paths:
+  /health:
+    get:
+      summary: Health check
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string }
+                  service: { type: string }
+                  version: { type: string }
+  /optimize:
+    post:
+      summary: Calcola la rosa ottimale
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [players, config]
+              properties:
+                players:
+                  type: array
+                  items: { $ref: '#/components/schemas/Player' }
+                config:
+                  $ref: '#/components/schemas/BuildConfig'
+                acquired:
+                  type: array
+                  items: { $ref: '#/components/schemas/Acquired' }
+      responses:
+        '200':
+          description: Risultato dell'ottimizzazione
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BuildResult'
+        '400':
+          description: Richiesta non valida
+        '500':
+          description: Errore interno
+components:
+  schemas:
+    Role:
+      type: string
+      enum: [P, D, C, A]
+    Player:
+      type: object
+      required: [id, name, team, role, cost, rating, starter]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        team: { type: string }
+        role: { $ref: '#/components/schemas/Role' }
+        cost: { type: integer, minimum: 0 }
+        rating: { type: number, minimum: 0, maximum: 100 }
+        starter: { type: boolean }
+    BuildConfig:
+      type: object
+      required: [totalBudget, rolePercentages, roleCounts, minStarterPct]
+      properties:
+        totalBudget: { type: integer, minimum: 1 }
+        rolePercentages:
+          type: object
+          properties:
+            P: { type: number }
+            D: { type: number }
+            C: { type: number }
+            A: { type: number }
+        roleCounts:
+          type: object
+          properties:
+            P: { type: integer, minimum: 1 }
+            D: { type: integer, minimum: 1 }
+            C: { type: integer, minimum: 1 }
+            A: { type: integer, minimum: 1 }
+        minStarterPct: { type: number, minimum: 0, maximum: 100 }
+        starterBoost: { type: number }
+        constraints:
+          type: object
+          properties:
+            locks: { type: array, items: { type: string } }
+            excludes: { type: array, items: { type: string } }
+            preferIds: { type: array, items: { type: string } }
+            preferTeams: { type: array, items: { type: string } }
+            preferBonus: { type: number }
+    Acquired:
+      type: object
+      required: [id, price]
+      properties:
+        id: { type: string }
+        price: { type: integer, minimum: 0 }
+    RoleSolution:
+      type: object
+      properties:
+        chosen:
+          type: array
+          items: { $ref: '#/components/schemas/Player' }
+        totalCost: { type: number }
+        totalScore: { type: number }
+        startersCount: { type: integer }
+    BuildResult:
+      type: object
+      properties:
+        byRole:
+          type: object
+          properties:
+            P: { $ref: '#/components/schemas/RoleSolution' }
+            D: { $ref: '#/components/schemas/RoleSolution' }
+            C: { $ref: '#/components/schemas/RoleSolution' }
+            A: { $ref: '#/components/schemas/RoleSolution' }
+        totalCost: { type: number }
+        totalScore: { type: number }
+        budgets:
+          type: object
+          properties:
+            P: { type: number }
+            D: { type: number }
+            C: { type: number }
+            A: { type: number }
+        initialBudgets:
+          type: object
+          properties:
+            P: { type: number }
+            D: { type: number }
+            C: { type: number }
+            A: { type: number }
