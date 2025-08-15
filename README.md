@@ -4,7 +4,8 @@ Un'applicazione web moderna per gestire aste di fantacalcio con ottimizzazione a
 
 ## ✨ Caratteristiche Principali
 
-### 🎯 **Gestione Aste**
+### 🎯 **Gestione Aste** 
+
 - Sistema di aste in tempo reale
 - Gestione budget e offerte
 - Cronologia delle aste
