@@ -1,0 +1,32 @@
+{
+  "totalPlayers": 515,
+  "totalRows": 515,
+  "sheets": [
+    "P",
+    "D",
+    "C",
+    "A"
+  ],
+  "byRole": {
+    "P": 59,
+    "D": 188,
+    "C": 166,
+    "A": 102
+  },
+  "byFascia": {
+    "Top": 24,
+    "Semi-Top": 42,
+    "Terza": 52,
+    "Quarta": 67,
+    "Scomm.": 90,
+    "Outsider": 130,
+    "Non Impostata": 86,
+    "Titolare \"Scarso\"": 24
+  },
+  "bySheet": {
+    "P": 59,
+    "D": 188,
+    "C": 166,
+    "A": 102
+  }
+}

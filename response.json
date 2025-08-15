@@ -1,0 +1,271 @@
+{
+    "byRole": {
+        "P": {
+            "chosen": [
+                {
+                    "id": "7",
+                    "name": "DE GEA",
+                    "team": "FIO",
+                    "role": "P",
+                    "cost": 27,
+                    "rating": 14,
+                    "starter": true
+                },
+                {
+                    "id": "11",
+                    "name": "BUTEZ",
+                    "team": "COM",
+                    "role": "P",
+                    "cost": 13,
+                    "rating": 10,
+                    "starter": true
+                },
+                {
+                    "id": "12",
+                    "name": "LEALI",
+                    "team": "GEN",
+                    "role": "P",
+                    "cost": 10,
+                    "rating": 8,
+                    "starter": true
+                }
+            ],
+            "totalCost": 50,
+            "totalScore": 47,
+            "startersCount": 3
+        },
+        "D": {
+            "chosen": [
+                {
+                    "id": "64",
+                    "name": "GOSENS",
+                    "team": "FIO",
+                    "role": "D",
+                    "cost": 27,
+                    "rating": 18,
+                    "starter": true
+                },
+                {
+                    "id": "68",
+                    "name": "BASTONI",
+                    "team": "INT",
+                    "role": "D",
+                    "cost": 25,
+                    "rating": 16,
+                    "starter": true
+                },
+                {
+                    "id": "68",
+                    "name": "BASTONI",
+                    "team": "INT",
+                    "role": "D",
+                    "cost": 25,
+                    "rating": 16,
+                    "starter": true
+                },
+                {
+                    "id": "100",
+                    "name": "HIEN",
+                    "team": "ATA",
+                    "role": "D",
+                    "cost": 6,
+                    "rating": 11,
+                    "starter": true
+                },
+                {
+                    "id": "100",
+                    "name": "HIEN",
+                    "team": "ATA",
+                    "role": "D",
+                    "cost": 6,
+                    "rating": 11,
+                    "starter": true
+                },
+                {
+                    "id": "100",
+                    "name": "HIEN",
+                    "team": "ATA",
+                    "role": "D",
+                    "cost": 6,
+                    "rating": 11,
+                    "starter": true
+                },
+                {
+                    "id": "111",
+                    "name": "TCHATCHOUA",
+                    "team": "VER",
+                    "role": "D",
+                    "cost": 3,
+                    "rating": 8,
+                    "starter": true
+                },
+                {
+                    "id": "114",
+                    "name": "COCO",
+                    "team": "TOR",
+                    "role": "D",
+                    "cost": 2,
+                    "rating": 8,
+                    "starter": true
+                }
+            ],
+            "totalCost": 100,
+            "totalScore": 135,
+            "startersCount": 8
+        },
+        "C": {
+            "chosen": [
+                {
+                    "id": "249",
+                    "name": "PULISIC",
+                    "team": "MIL",
+                    "role": "C",
+                    "cost": 70,
+                    "rating": 28,
+                    "starter": true
+                },
+                {
+                    "id": "257",
+                    "name": "CALHANOGLU",
+                    "team": "INT",
+                    "role": "C",
+                    "cost": 30,
+                    "rating": 23,
+                    "starter": true
+                },
+                {
+                    "id": "257",
+                    "name": "CALHANOGLU",
+                    "team": "INT",
+                    "role": "C",
+                    "cost": 30,
+                    "rating": 23,
+                    "starter": true
+                },
+                {
+                    "id": "276",
+                    "name": "EDERSON D.S.",
+                    "team": "ATA",
+                    "role": "C",
+                    "cost": 15,
+                    "rating": 15,
+                    "starter": true
+                },
+                {
+                    "id": "297",
+                    "name": "LOCATELLI",
+                    "team": "JUV",
+                    "role": "C",
+                    "cost": 2,
+                    "rating": 12,
+                    "starter": true
+                },
+                {
+                    "id": "300",
+                    "name": "CAQUERET",
+                    "team": "COM",
+                    "role": "C",
+                    "cost": 1,
+                    "rating": 12,
+                    "starter": true
+                },
+                {
+                    "id": "301",
+                    "name": "DE ROON",
+                    "team": "ATA",
+                    "role": "C",
+                    "cost": 1,
+                    "rating": 12,
+                    "starter": true
+                },
+                {
+                    "id": "303",
+                    "name": "FREULER",
+                    "team": "BOL",
+                    "role": "C",
+                    "cost": 1,
+                    "rating": 11,
+                    "starter": true
+                }
+            ],
+            "totalCost": 150,
+            "totalScore": 174,
+            "startersCount": 8
+        },
+        "A": {
+            "chosen": [
+                {
+                    "id": "424",
+                    "name": "GIMENEZ",
+                    "team": "MIL",
+                    "role": "A",
+                    "cost": 70,
+                    "rating": 25,
+                    "starter": true
+                },
+                {
+                    "id": "433",
+                    "name": "KRSTOVIC",
+                    "team": "LEC",
+                    "role": "A",
+                    "cost": 45,
+                    "rating": 20,
+                    "starter": true
+                },
+                {
+                    "id": "437",
+                    "name": "LAURIENTÈ",
+                    "team": "SAS",
+                    "role": "A",
+                    "cost": 35,
+                    "rating": 15,
+                    "starter": true
+                },
+                {
+                    "id": "437",
+                    "name": "LAURIENTÈ",
+                    "team": "SAS",
+                    "role": "A",
+                    "cost": 35,
+                    "rating": 15,
+                    "starter": true
+                },
+                {
+                    "id": "444",
+                    "name": "NGONGE",
+                    "team": "TOR",
+                    "role": "A",
+                    "cost": 11,
+                    "rating": 9,
+                    "starter": true
+                },
+                {
+                    "id": "514",
+                    "name": "RASPADORI",
+                    "team": "NAP",
+                    "role": "A",
+                    "cost": 1,
+                    "rating": 13,
+                    "starter": false
+                }
+            ],
+            "totalCost": 197,
+            "totalScore": 119,
+            "startersCount": 5
+        }
+    },
+    "totalCost": 497,
+    "totalScore": 475,
+    "budgets": {
+        "P": 50,
+        "D": 100,
+        "C": 150,
+        "A": 200
+    },
+    "initialBudgets": {
+        "P": 50,
+        "D": 100,
+        "C": 150,
+        "A": 200
+    }
+}
