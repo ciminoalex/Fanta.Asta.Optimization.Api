@@ -69,7 +69,7 @@ L'applicazione sarà disponibile su `http://localhost:3000`
 
 ### API Esterna
 1. Clicca sul pulsante **"API"** nell'header
-2. Inserisci l'URL base dell'API (es: `http://localhost:3000`)
+2. Inserisci l'URL base dell'API (default: `https://fcapi.mtf-factory.com`)
 3. Configura timeout e parametri di ottimizzazione
 4. Clicca **"Test Connessione"** per verificare
 5. Salva la configurazione
@@ -124,6 +124,8 @@ L'applicazione si integra con un'API REST esterna per l'ottimizzazione della ros
 ### Endpoint Principali
 - `GET /health` - Controllo stato API
 - `POST /optimize` - Ottimizzazione rosa
+
+**URL Base**: `https://fcapi.mtf-factory.com`
 
 ### Formato Richiesta
 ```json
