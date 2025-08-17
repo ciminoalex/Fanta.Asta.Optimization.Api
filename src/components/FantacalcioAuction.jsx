@@ -3,35 +3,47 @@ import { Search, Users, TrendingUp, Calculator, Award, Trash2, ArrowUp, Crown, S
 import { fantaOptimizerApi } from '../services/fantaOptimizerApi.js';
 import { isApiConfigured, saveApiConfig } from '../config/api.js';
 import ApiConfigModal from './ApiConfigModal.jsx';
+import { ENV_CONFIG, log } from '../config/environment.js';
 
 // Funzione per caricare i dati dal JSON
 const loadPlayersFromJson = async () => {
   try {
-    if (window.fantacalcioJsonData) {
-      const jsonData = JSON.parse(window.fantacalcioJsonData);
-      console.log('Dati caricati dal JSON:', jsonData.metadata);
-      return jsonData.players;
-    }
+    log('info', 'Caricamento dati secondo la priorità configurata...');
     
-    console.log('JSON non trovato, utilizzo dati di esempio dal file JSON');
-    return await loadSamplePlayersData();
+    // Carica direttamente i dati di produzione (priorità massima)
+    return await loadProductionPlayersData();
   } catch (error) {
-    console.error('Errore nel caricamento del JSON:', error);
-    return await loadSamplePlayersData();
+    log('error', 'Errore nel caricamento dei dati:', error);
+    return await loadProductionPlayersData();
   }
 };
 
-// Funzione per caricare i dati di esempio dal file JSON
-const loadSamplePlayersData = async () => {
+// Funzione per caricare i dati di produzione dal file JSON
+const loadProductionPlayersData = async () => {
   try {
-    const response = await fetch('/sample-players.json');
-    if (response.ok) {
-      return await response.json();
+    log('info', 'Tentativo di caricamento dati di produzione...');
+    
+    // Prima prova a caricare i dati di produzione
+    const productionResponse = await fetch(ENV_CONFIG.DATA_SOURCES.PRODUCTION_FILE);
+    if (productionResponse.ok) {
+      const productionData = await productionResponse.json();
+      log('info', `✅ Dati di produzione caricati con successo: ${productionData.length} giocatori`);
+      return productionData;
     }
-    throw new Error('Impossibile caricare i dati di esempio');
+    
+    // Fallback sui dati di esempio se quelli di produzione non esistono
+    log('warn', '⚠️ Dati di produzione non trovati, uso dati di esempio');
+    const sampleResponse = await fetch(ENV_CONFIG.DATA_SOURCES.TEST_FILE);
+    if (sampleResponse.ok) {
+      const sampleData = await sampleResponse.json();
+      log('info', `📋 Dati di esempio caricati: ${sampleData.length} giocatori`);
+      return sampleData;
+    }
+    throw new Error('Impossibile caricare i dati');
   } catch (error) {
-    console.error('Errore nel caricamento dei dati di esempio:', error);
-    // Fallback con dati minimi se il file JSON non è disponibile
+    log('error', 'Errore nel caricamento dei dati:', error);
+    // Fallback con dati minimi se i file JSON non sono disponibili
+    log('warn', '🔄 Utilizzo dati minimi di fallback');
     return [
       {"id":1,"name":"KEAN","team":"FIO","role":"A","fascia":"Top","budgetPercentage":30,"fmv":5.93,"gol":14,"assist":0,"presenze":19,"notes":"titolarissimo • tanti gol"},
       {"id":2,"name":"MARTINEZ L.","team":"INT","role":"A","fascia":"Top","budgetPercentage":30,"fmv":8.73,"gol":24,"assist":3,"presenze":33,"notes":"titolarissimo • tanti gol"}
@@ -54,10 +66,10 @@ const roleColors = {
 };
 
 const defaultFormation = {
-  'P': { min: 3, max: 3, percentage: 15 },
-  'D': { min: 8, max: 8, percentage: 25 },
+  'P': { min: 3, max: 3, percentage: 10 },
+  'D': { min: 8, max: 8, percentage: 20 },
   'C': { min: 8, max: 8, percentage: 30 },
-  'A': { min: 6, max: 6, percentage: 30 }
+  'A': { min: 6, max: 6, percentage: 40 }
 };
 
 const fasciaConfig = {
@@ -370,7 +382,7 @@ const buildBestSquadWithStarterConstraint = (players, cfg) => {
     const maxBudget = finalRoleBudgets[role];
     const minStarterReq = Math.ceil(targetCount * minStarterPct / 100);
     
-    console.log(`🔍 Risolvendo ruolo ${role}: ${targetCount} giocatori, budget €${maxBudget}, titolari min: ${minStarterReq}`);
+    log('debug', `🔍 Risolvendo ruolo ${role}: ${targetCount} giocatori, budget €${maxBudget}, titolari min: ${minStarterReq}`);
     
     // Verifica che ci siano abbastanza giocatori
     if (playersByRole[role].length < targetCount) {
@@ -400,7 +412,7 @@ const buildBestSquadWithStarterConstraint = (players, cfg) => {
     totalCost += solution.totalCost;
     totalScore += solution.totalScore;
     
-    console.log(`✅ Ruolo ${role} completato: ${solution.chosen.length} giocatori, costo €${solution.totalCost}, punteggio ${solution.totalScore}, titolari ${solution.startersCount}`);
+    log('info', `✅ Ruolo ${role} completato: ${solution.chosen.length} giocatori, costo €${solution.totalCost}, punteggio ${solution.totalScore}, titolari ${solution.startersCount}`);
   }
   
   return {
@@ -567,13 +579,16 @@ function FantacalcioAuction() {
     setFormation(newFormation);
   };
   
-  const [availablePlayers, setAvailablePlayers] = useState([]);
+  const [availablePlayers, setAvailablePlayers] = useState(() => {
+    const saved = localStorage.getItem('fantacalcio_availablePlayers');
+    return saved ? JSON.parse(saved) : [];
+  });
   const [myTeam, setMyTeam] = useState(() => {
     const saved = localStorage.getItem('fantacalcio_myTeam');
     return saved ? JSON.parse(saved) : [];
   });
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedRole, setSelectedRole] = useState('ALL');
+  const [selectedRoles, setSelectedRoles] = useState(new Set());
   const [selectedFasce, setSelectedFasce] = useState(new Set());
   const [selectedSquadre, setSelectedSquadre] = useState(new Set());
   const [currentPlayer, setCurrentPlayer] = useState(null);
@@ -604,26 +619,46 @@ function FantacalcioAuction() {
     const loadData = async () => {
       setLoading(true);
       try {
-        const players = await loadPlayersFromJson();
+        // Controlla se ci sono dati salvati nel localStorage
+        const savedAvailablePlayers = localStorage.getItem('fantacalcio_availablePlayers');
         
-        // Imposta i flag isOwned e isUnavailable sui giocatori
-        const playersWithFlags = players.map(player => ({
-          ...player,
-          isOwned: myTeam.some(ownedPlayer => ownedPlayer.id === player.id),
-          isUnavailable: player.isUnavailable || false
-        }));
-        
-        setAvailablePlayers(playersWithFlags);
-        
-        if (window.fantacalcioJsonData) {
-          const jsonData = JSON.parse(window.fantacalcioJsonData);
-          setDataSource(`JSON completo (${jsonData.metadata.totalPlayers} giocatori)`);
+        if (savedAvailablePlayers) {
+          // Usa i dati salvati se disponibili
+          const parsedPlayers = JSON.parse(savedAvailablePlayers);
+          
+          // Sincronizza i flag isOwned con myTeam attuale
+          const playersWithUpdatedFlags = parsedPlayers.map(player => ({
+            ...player,
+            isOwned: myTeam.some(ownedPlayer => ownedPlayer.id === player.id)
+          }));
+          
+          setAvailablePlayers(playersWithUpdatedFlags);
+          
+          // Determina la fonte dei dati
+          const dataSource = parsedPlayers.length > 0 ? 
+            `Dati caricati (${parsedPlayers.length} giocatori) - Dati salvati` :
+            `Dati di esempio (${parsedPlayers.length} giocatori) - Dati salvati`;
+          setDataSource(dataSource);
         } else {
-          setDataSource(`Dati di esempio (${players.length} giocatori)`);
+          // Carica i dati dal JSON se non ci sono dati salvati
+          const players = await loadPlayersFromJson();
+          
+          // Imposta i flag isOwned e isUnavailable sui giocatori
+          const playersWithFlags = players.map(player => ({
+            ...player,
+            isOwned: myTeam.some(ownedPlayer => ownedPlayer.id === player.id),
+            isUnavailable: player.isUnavailable || false
+          }));
+          
+          setAvailablePlayers(playersWithFlags);
+          
+          // Determina la fonte dei dati
+          const dataSource = `Dati caricati (${players.length} giocatori)`;
+          setDataSource(dataSource);
         }
       } catch (error) {
-        console.error('Errore nel caricamento:', error);
-        const samplePlayers = await loadSamplePlayersData();
+        log('error', 'Errore nel caricamento:', error);
+        const samplePlayers = await loadProductionPlayersData();
         
         // Imposta i flag anche sui dati di esempio
         const samplePlayersWithFlags = samplePlayers.map(player => ({
@@ -633,7 +668,7 @@ function FantacalcioAuction() {
         }));
         
         setAvailablePlayers(samplePlayersWithFlags);
-        setDataSource('Dati di esempio (errore nel caricamento)');
+        setDataSource('Dati di fallback (errore nel caricamento)');
       }
       setLoading(false);
     };
@@ -655,6 +690,13 @@ function FantacalcioAuction() {
   useEffect(() => {
     localStorage.setItem('fantacalcio_myTeam', JSON.stringify(myTeam));
   }, [myTeam]);
+
+  // Salva availablePlayers nel localStorage quando cambia
+  useEffect(() => {
+    if (availablePlayers.length > 0) {
+      localStorage.setItem('fantacalcio_availablePlayers', JSON.stringify(availablePlayers));
+    }
+  }, [availablePlayers]);
 
   // Aggiorna il flag isOwned sui giocatori disponibili quando myTeam cambia
   useEffect(() => {
@@ -679,7 +721,7 @@ function FantacalcioAuction() {
             lastCheck: new Date().toISOString()
           }));
         } catch (error) {
-          console.warn('API health check failed:', error);
+          log('warn', 'API health check failed:', error);
           setApiStatus(prev => ({
             ...prev,
             isAvailable: false,
@@ -708,7 +750,7 @@ function FantacalcioAuction() {
         }));
       }
     } catch (error) {
-      console.error('Failed to save API configuration:', error);
+      log('error', 'Failed to save API configuration:', error);
     }
   };
 
@@ -720,26 +762,46 @@ function FantacalcioAuction() {
   const reloadData = async () => {
     setLoading(true);
     try {
-      const players = await loadPlayersFromJson();
+      // Controlla se ci sono dati salvati nel localStorage
+      const savedAvailablePlayers = localStorage.getItem('fantacalcio_availablePlayers');
       
-      // Imposta i flag isOwned e isUnavailable sui giocatori
-      const playersWithFlags = players.map(player => ({
-        ...player,
-        isOwned: myTeam.some(ownedPlayer => ownedPlayer.id === player.id),
-        isUnavailable: player.isUnavailable || false
-      }));
-      
-      setAvailablePlayers(playersWithFlags);
-      
-      if (window.fantacalcioJsonData) {
-        const jsonData = JSON.parse(window.fantacalcioJsonData);
-        setDataSource(`JSON completo (${jsonData.metadata.totalPlayers} giocatori)`);
+      if (savedAvailablePlayers) {
+        // Usa i dati salvati se disponibili
+        const parsedPlayers = JSON.parse(savedAvailablePlayers);
+        
+        // Sincronizza i flag isOwned con myTeam attuale
+        const playersWithUpdatedFlags = parsedPlayers.map(player => ({
+          ...player,
+          isOwned: myTeam.some(ownedPlayer => ownedPlayer.id === player.id)
+        }));
+        
+        setAvailablePlayers(playersWithUpdatedFlags);
+        
+        // Determina la fonte dei dati
+        const dataSource = parsedPlayers.length > 0 ? 
+          `Dati caricati (${parsedPlayers.length} giocatori) - Dati salvati` :
+          `Dati di esempio (${parsedPlayers.length} giocatori) - Dati salvati`;
+        setDataSource(dataSource);
       } else {
-        setDataSource(`Dati di esempio (${players.length} giocatori)`);
+        // Carica i dati dal JSON se non ci sono dati salvati
+        const players = await loadPlayersFromJson();
+        
+        // Imposta i flag isOwned e isUnavailable sui giocatori
+        const playersWithFlags = players.map(player => ({
+          ...player,
+          isOwned: myTeam.some(ownedPlayer => ownedPlayer.id === player.id),
+          isUnavailable: player.isUnavailable || false
+        }));
+        
+        setAvailablePlayers(playersWithFlags);
+        
+        // Determina la fonte dei dati
+        const dataSource = `Dati caricati (${players.length} giocatori)`;
+        setDataSource(dataSource);
       }
     } catch (error) {
-      console.error('Errore nel ricaricamento:', error);
-      const samplePlayers = await loadSamplePlayersData();
+      log('error', 'Errore nel ricaricamento:', error);
+      const samplePlayers = await loadProductionPlayersData();
       
       // Imposta i flag anche sui dati di esempio
       const samplePlayersWithFlags = samplePlayers.map(player => ({
@@ -749,7 +811,7 @@ function FantacalcioAuction() {
       }));
       
       setAvailablePlayers(samplePlayersWithFlags);
-      setDataSource('Dati di esempio (errore nel caricamento)');
+      setDataSource('Dati di fallback (errore nel caricamento)');
     }
     setLoading(false);
   };
@@ -771,12 +833,13 @@ function FantacalcioAuction() {
       localStorage.removeItem('fantacalcio_myTeam');
       localStorage.removeItem('fantacalcio_budget');
       localStorage.removeItem('fantacalcio_formation');
+      localStorage.removeItem('fantacalcio_availablePlayers');
       
       // Reset dello stato corrente
       setCurrentPlayer(null);
       setBidAmount('');
       setSearchTerm('');
-      setSelectedRole('ALL');
+      setSelectedRoles(new Set());
       setSelectedFasce(new Set());
       setSelectedSquadre(new Set());
       setShowUnavailable(false);
@@ -841,6 +904,16 @@ function FantacalcioAuction() {
     };
   }, [totalRemainingPlayers, remainingByRole, remainingBudget]);
 
+  const handleRoleToggle = (role) => {
+    const newSelectedRoles = new Set(selectedRoles);
+    if (newSelectedRoles.has(role)) {
+      newSelectedRoles.delete(role);
+    } else {
+      newSelectedRoles.add(role);
+    }
+    setSelectedRoles(newSelectedRoles);
+  };
+
   const handleFasciaToggle = (fascia) => {
     const newSelectedFasce = new Set(selectedFasce);
     if (newSelectedFasce.has(fascia)) {
@@ -868,7 +941,7 @@ function FantacalcioAuction() {
     return availablePlayers.filter(player => {
       const matchesSearch = player.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                            player.team.toLowerCase().includes(searchTerm.toLowerCase());
-      const matchesRole = selectedRole === 'ALL' || player.role === selectedRole;
+      const matchesRole = selectedRoles.size === 0 || selectedRoles.has(player.role);
       const matchesFascia = selectedFasce.size === 0 || selectedFascia.has(player.fascia);
       const matchesSquadra = selectedSquadre.size === 0 || 
       Array.from(selectedSquadre).some(squadraNome => {
@@ -885,7 +958,7 @@ function FantacalcioAuction() {
       
       return matchesSearch && matchesRole && matchesFascia && matchesSquadra && matchesAvailability;
     });
-  }, [availablePlayers, searchTerm, selectedRole, selectedFasce, selectedSquadre, showUnavailable]);
+  }, [availablePlayers, searchTerm, selectedRoles, selectedFasce, selectedSquadre, showUnavailable]);
 
   const handlePlayerWon = () => {
     if (!currentPlayer || !bidAmount) return;
@@ -934,7 +1007,7 @@ function FantacalcioAuction() {
     if (player) {
       setMyTeam(prev => prev.filter(p => p.id !== playerId));
       
-      // Aggiorna il flag isOwned invece di aggiungere nuovamente il giocatore
+      // Aggiorna il flag isOwned ma mantieni isUnavailable se era già impostato
       setAvailablePlayers(prev => prev.map(p => 
         p.id === playerId 
           ? { ...p, isOwned: false }
@@ -953,6 +1026,37 @@ function FantacalcioAuction() {
           ? { ...p, isUnavailable: false }
           : p
       ));
+    }
+  };
+
+  // Funzione per resettare tutti i dati salvati nel localStorage
+  const resetSavedData = async () => {
+    if (window.confirm('Sei sicuro di voler resettare tutti i dati salvati? Questo ripristinerà tutti i giocatori come disponibili.')) {
+      // Rimuovi i dati salvati dal localStorage
+      localStorage.removeItem('fantacalcio_availablePlayers');
+      
+      // Ricarica i dati dal JSON originale
+      const players = await loadPlayersFromJson();
+      
+      // Imposta i flag isOwned e isUnavailable sui giocatori
+      const playersWithFlags = players.map(player => ({
+        ...player,
+        isOwned: myTeam.some(ownedPlayer => ownedPlayer.id === player.id),
+        isUnavailable: false
+      }));
+      
+      setAvailablePlayers(playersWithFlags);
+      
+      // Determina la fonte dei dati
+      const dataSource = `Dati caricati (${players.length} giocatori) - Reset effettuato`;
+      setDataSource(dataSource);
+      
+      // Reset dei filtri
+      setSelectedRoles(new Set());
+      setSelectedFasce(new Set());
+      setSelectedSquadre(new Set());
+      setSearchTerm('');
+      setShowUnavailable(false);
     }
   };
 
@@ -1058,7 +1162,7 @@ function FantacalcioAuction() {
             });
             
             // Debug: log per confrontare con le altre fasi
-            console.log(`🔍 Optimal - ${player.name}: budgetPercentage=${player.budgetPercentage}%, totalBudget=${totalBudget}, playerCost=${playerCost}`);
+            log('debug', `🔍 Optimal - ${player.name}: budgetPercentage=${player.budgetPercentage}%, totalBudget=${totalBudget}, playerCost=${playerCost}`);
             totalCost += playerCost;
             budgetUtilization = (totalCost / availableBudget) * 100;
           } else {
@@ -1090,7 +1194,7 @@ function FantacalcioAuction() {
               const playerCost = calculatePlayerValue(player.budgetPercentage);
               
               // Debug: log per capire perché i prezzi sono bassi
-              console.log(`🔍 Completion - ${player.name}: budgetPercentage=${player.budgetPercentage}%, totalBudget=${totalBudget}, playerCost=${playerCost}`);
+              log('debug', `🔍 Completion - ${player.name}: budgetPercentage=${player.budgetPercentage}%, totalBudget=${totalBudget}, playerCost=${playerCost}`);
               
               return {
               ...player,
@@ -1109,7 +1213,7 @@ function FantacalcioAuction() {
         // MA sempre rispettando il limite del 110% del budget
         if (selectedPlayers.length < needed) {
           const remainingNeeded = needed - selectedPlayers.length;
-          console.warn(`⚠️ Ruolo ${role}: titolarità >= 4 insufficiente, servono ancora ${remainingNeeded} giocatori`);
+          log('warn', `⚠️ Ruolo ${role}: titolarità >= 4 insufficiente, servono ancora ${remainingNeeded} giocatori`);
           
           // Allarga il filtro per includere giocatori con titolarità >= 4
           const fallbackPlayers = availablePlayers
@@ -1130,7 +1234,7 @@ function FantacalcioAuction() {
               const playerCost = calculatePlayerValue(player.budgetPercentage);
               
               // Debug: log per capire perché i prezzi sono bassi
-              console.log(`🔍 Fallback - ${player.name}: budgetPercentage=${player.budgetPercentage}%, totalBudget=${totalBudget}, playerCost=${playerCost}`);
+              log('debug', `🔍 Fallback - ${player.name}: budgetPercentage=${player.budgetPercentage}%, totalBudget=${totalBudget}, playerCost=${playerCost}`);
               
               return {
               ...player,
@@ -1149,7 +1253,7 @@ function FantacalcioAuction() {
           // MA sempre rispettando il limite del 110% del budget
           if (selectedPlayers.length < needed) {
             const finalNeeded = needed - selectedPlayers.length;
-            console.warn(`⚠️ Ruolo ${role}: usando tutti i giocatori disponibili per completare (${finalNeeded} mancanti), rispettando il 110%`);
+            log('warn', `⚠️ Ruolo ${role}: usando tutti i giocatori disponibili per completare (${finalNeeded} mancanti), rispettando il 110%`);
             
             const allRemainingPlayers = availablePlayers
               .filter(p => p.role === role)
@@ -1168,7 +1272,7 @@ function FantacalcioAuction() {
               const playerCost = calculatePlayerValue(player.budgetPercentage);
               
               // Debug: log per capire perché i prezzi sono bassi
-              console.log(`🔍 Emergency - ${player.name}: budgetPercentage=${player.budgetPercentage}%, totalBudget=${totalBudget}, playerCost=${playerCost}`);
+              log('debug', `🔍 Emergency - ${player.name}: budgetPercentage=${player.budgetPercentage}%, totalBudget=${totalBudget}, playerCost=${playerCost}`);
               
               return {
                 ...player,
@@ -1480,8 +1584,8 @@ function FantacalcioAuction() {
   
   useEffect(() => {
     const calculateIdealTeam = async () => {
-      console.log('🔄 Calcolo rosa ideale avviato');
-      console.log('📊 Dati disponibili:', {
+      log('info', '🔄 Calcolo rosa ideale avviato');
+      log('debug', '📊 Dati disponibili:', {
         availablePlayers: availablePlayers.length,
         formation,
         totalBudget,
@@ -1493,7 +1597,7 @@ function FantacalcioAuction() {
       // Usa SOLO l'API esterna per l'ottimizzazione
       if (apiStatus.isAvailable) {
         try {
-          console.log('🚀 Chiamata API con:', {
+          log('info', '🚀 Chiamata API con:', {
             availablePlayers: availablePlayers.length,
             formation,
             totalBudget,
@@ -1509,22 +1613,22 @@ function FantacalcioAuction() {
             { minStarterPct: 50 }
           );
           
-          console.log('✅ Risultato API ricevuto:', apiResult);
-          console.log('🔍 Struttura byRole:', Object.keys(apiResult.byRole));
+          log('info', '✅ Risultato API ricevuto:', apiResult);
+          log('debug', '🔍 Struttura byRole:', Object.keys(apiResult.byRole));
           
           // Converti il risultato API nel formato locale
           result = [];
           const seenIds = new Set(); // Set per tracciare gli ID già visti
           
           Object.entries(apiResult.byRole).forEach(([role, roleSolution]) => {
-            console.log(`📋 Ruolo ${role}:`, roleSolution);
+            log('debug', `📋 Ruolo ${role}:`, roleSolution);
             if (roleSolution.chosen && Array.isArray(roleSolution.chosen)) {
               roleSolution.chosen.forEach(player => {
-                console.log(`👤 Giocatore ${role}:`, player);
+                log('debug', `👤 Giocatore ${role}:`, player);
                 
                 // Controlla se l'ID è già stato visto (duplicato)
                 if (seenIds.has(player.id)) {
-                  console.log(`⚠️ Giocatore duplicato saltato: ${player.name} (ID: ${player.id})`);
+                  log('warn', `⚠️ Giocatore duplicato saltato: ${player.name} (ID: ${player.id})`);
                   return; // Salta questo giocatore
                 }
                 
@@ -1542,20 +1646,20 @@ function FantacalcioAuction() {
                 });
               });
             } else {
-              console.log(`⚠️ Struttura inaspettata per ruolo ${role}:`, roleSolution);
+              log('warn', `⚠️ Struttura inaspettata per ruolo ${role}:`, roleSolution);
             }
           });
           
-          console.log('🔄 Risultato convertito:', result.length, 'giocatori (duplicati rimossi)');
-          console.log('📝 Dettagli risultato:', result);
+          log('info', '🔄 Risultato convertito:', result.length, 'giocatori (duplicati rimossi)');
+          log('debug', '📝 Dettagli risultato:', result);
         } catch (error) {
-          console.error('❌ Errore API ottimizzazione:', error.message);
+          log('error', '❌ Errore API ottimizzazione:', error.message);
           // Non usare fallback, lascia la rosa vuota
           result = [];
         }
       } else {
         // API non disponibile, non mostrare rosa ideale
-        console.log('🔴 API non disponibile:', {
+        log('warn', '🔴 API non disponibile:', {
           isConfigured: apiStatus.isConfigured,
           isAvailable: apiStatus.isAvailable,
           lastCheck: apiStatus.lastCheck
@@ -1599,9 +1703,9 @@ function FantacalcioAuction() {
       //   }
 
       
-      console.log('🎯 Prima di setIdealTeam:', result.length, 'giocatori');
+      log('info', '🎯 Prima di setIdealTeam:', result.length, 'giocatori');
       setIdealTeam(result);
-      console.log('🎯 Dopo setIdealTeam chiamato');
+      log('info', '🎯 Dopo setIdealTeam chiamato');
     };
     
     calculateIdealTeam();
@@ -1609,7 +1713,7 @@ function FantacalcioAuction() {
   
   // Calcola il costo totale della rosa ideale
   const idealCost = useMemo(() => {
-    console.log('💰 Calcolo idealCost con idealTeam:', idealTeam.length, 'giocatori');
+    log('debug', '💰 Calcolo idealCost con idealTeam:', idealTeam.length, 'giocatori');
     return idealTeam.reduce((sum, p) => sum + p.displayPrice, 0);
   }, [idealTeam]);
   
@@ -1641,7 +1745,7 @@ function FantacalcioAuction() {
   }, [formation, totalBudget, myTeam, idealTeam]);
 
   // Log per debug del re-rendering
-  console.log('🔄 Componente re-renderizzato con idealTeam:', idealTeam.length, 'giocatori');
+  log('debug', '🔄 Componente re-renderizzato con idealTeam:', idealTeam.length, 'giocatori');
   
   if (loading) {
     return (
@@ -1650,11 +1754,11 @@ function FantacalcioAuction() {
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
           <p className="text-gray-600 mb-4">Caricamento dati giocatori...</p>
           <div className="text-xs text-gray-500 max-w-md">
-            <p className="font-medium mb-2">💡 Per utilizzare tutti i 515 giocatori:</p>
+            <p className="font-medium mb-2">💡 Per utilizzare i dati di produzione:</p>
             <ol className="text-left space-y-1">
-              <li>1. Esegui l'analysis tool per generare il JSON</li>
-              <li>2. Il JSON sarà salvato in window.fantacalcioJsonData</li>
-              <li>3. Clicca il pulsante 🔄 per ricaricare</li>
+              <li>1. Esegui: <code className="bg-gray-200 px-1 rounded">node generate-production-data.js</code></li>
+              <li>2. I dati verranno salvati in <code className="bg-gray-200 px-1 rounded">production-players.json</code></li>
+              <li>3. L'app caricherà automaticamente i nuovi dati</li>
             </ol>
             <p className="mt-2">Altrimenti utilizzerà i dati di esempio (20 giocatori)</p>
           </div>
@@ -1677,6 +1781,7 @@ function FantacalcioAuction() {
             <div className="text-right">
               <div className="text-sm text-gray-500 flex items-center gap-2">
                 {dataSource}
+                {/*
                 <button
                   onClick={reloadData}
                   className="px-2 py-1 bg-blue-500 text-white rounded text-xs hover:bg-blue-600 transition-colors"
@@ -1684,37 +1789,53 @@ function FantacalcioAuction() {
                 >
                   🔄
                 </button>
-                <button
-                  onClick={resetAll}
-                  className="px-2 py-1 bg-red-500 text-white rounded text-xs hover:bg-red-600 transition-colors"
-                  title="Reset completo"
-                >
-                  🗑️
-                </button>
+                */}
+                {/*
                 <button
                   onClick={() => {
-                    console.log('=== DEBUG SQUADRE ===');
-                    console.log('Squadre configurate:', Object.keys(squadraColors));
-                    console.log('Squadre nei dati:', [...new Set(availablePlayers.map(p => p.team))]);
-                    console.log('Primi 5 giocatori:', availablePlayers.slice(0, 5).map(p => ({ name: p.name, team: p.team })));
+                    log('debug', '=== DEBUG SQUADRE ===');
+                    log('debug', 'Squadre configurate:', Object.keys(squadraColors));
+                    log('debug', 'Squadre nei dati:', [...new Set(availablePlayers.map(p => p.team))]);
+                    log('debug', 'Primi 5 giocatori:', availablePlayers.slice(0, 5).map(p => ({ name: p.name, team: p.team })));
                   }}
                   className="px-2 py-1 bg-purple-500 text-white rounded text-xs hover:bg-purple-600 transition-colors"
                   title="Debug squadre"
                 >
                   🐛
                 </button>
-                <button
-                  onClick={() => setShowApiConfigModal(true)}
-                  className={`px-2 py-1 rounded text-xs transition-colors ${
-                    apiStatus.isConfigured && apiStatus.isAvailable
-                      ? 'bg-green-500 text-white hover:bg-green-600'
-                      : 'bg-orange-500 text-white hover:bg-orange-600'
-                  }`}
-                  title="Configurazione API"
-                >
-                  <Settings className="w-3 h-3 inline mr-1" />
-                  API
-                </button>
+                */}
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={resetAll}
+                    className="px-2 py-1 bg-red-500 text-white rounded text-xs hover:bg-red-600 transition-colors"
+                    title="Reset completo"
+                  >
+                    🗑️
+                    CLR
+                  </button>
+                  <button
+                    onClick={() => setShowApiConfigModal(true)}
+                    className={`px-2 py-1 rounded text-xs transition-colors ${
+                      apiStatus.isConfigured && apiStatus.isAvailable
+                        ? 'bg-green-500 text-white hover:bg-green-600'
+                        : 'bg-orange-500 text-white hover:bg-orange-600'
+                    }`}
+                    title="Configurazione API"
+                  >
+                    <Settings className="w-3 h-3 inline mr-1" />
+                    API
+                  </button>
+                  {/*
+                  <button
+                    onClick={resetSavedData}
+                    className="px-2 py-1 rounded text-xs bg-red-500 text-white hover:bg-red-600 transition-colors"
+                    title="Resetta dati salvati"
+                  >
+                    <Trash2 className="w-3 h-3 inline mr-1" />
+                    Reset
+                  </button>
+                  */}
+                </div>
               </div>
               <div className="text-xs text-gray-400">
                 {availablePlayers.length} giocatori disponibili
@@ -1831,15 +1952,50 @@ function FantacalcioAuction() {
                 </div>
               </div>
               
-                                          {/* Area Filtri Avanzati Collassabile */}
+                                          {/* Filtro Ruoli - Pulsanti circolari */}
+              <div className="mb-4">
+                <div className="flex gap-3">
+                  {Object.entries(roleLabels).map(([role, label]) => {
+                    const isSelected = selectedRoles.has(role);
+                    const roleColor = roleColors[role];
+                    
+                    return (
+                      <button
+                        key={role}
+                        onClick={() => handleRoleToggle(role)}
+                        className={`w-12 h-12 rounded-full border-2 transition-all duration-200 flex items-center justify-center font-bold text-sm shadow-sm hover:shadow-md ${
+                          isSelected 
+                            ? `${roleColor} border-gray-300 transform scale-110` 
+                            : 'bg-gray-100 text-gray-600 border-gray-300 hover:bg-gray-200'
+                        }`}
+                        title={`${label} - ${isSelected ? 'Rimuovi filtro' : 'Aggiungi filtro'}`}
+                      >
+                        {role}
+                      </button>
+                    );
+                  })}
+                </div>
+                {selectedRoles.size > 0 && (
+                  <button
+                    onClick={() => setSelectedRoles(new Set())}
+                    className="mt-2 px-3 py-1 rounded-lg text-xs font-medium bg-red-100 text-red-700 border border-red-200 hover:bg-red-200 transition-colors duration-200 flex items-center gap-1"
+                    title="Cancella filtro ruoli"
+                  >
+                    <X className="w-3 h-3" />
+                    <span>Reset Ruoli</span>
+                  </button>
+                )}
+              </div>
+              
+              {/* Area Filtri Avanzati Collassabile */}
               <details className="group">
                 <summary className="cursor-pointer list-none">
                   <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-200 hover:bg-gray-100 transition-colors">
                     <div className="flex items-center gap-2">
                       <span className="text-sm font-semibold text-gray-700">⚙️ Filtri Avanzati</span>
                       <span className="text-xs text-gray-500">
-                        {selectedRole !== 'ALL' || selectedFasce.size > 0 || selectedSquadre.size > 0 || showUnavailable
-                          ? `(${(selectedRole !== 'ALL' ? 1 : 0) + selectedFasce.size + selectedSquadre.size + (showUnavailable ? 1 : 0)} attivi)`
+                        {selectedRoles.size > 0 || selectedFasce.size > 0 || selectedSquadre.size > 0 || showUnavailable
+                          ? `(${selectedRoles.size + selectedFasce.size + selectedSquadre.size + (showUnavailable ? 1 : 0)} attivi)`
                           : '(nessuno attivo)'
                         }
                       </span>
@@ -1853,34 +2009,6 @@ function FantacalcioAuction() {
                 </summary>
                 
                 <div className="mt-3 space-y-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
-                  {/* Filtro Ruoli - Larghezza completa */}
-                  <div>
-                    <label className="block text-sm font-medium mb-2 text-gray-700">
-                      Filtra per Ruolo
-                    </label>
-                    <div className="relative">
-                <select
-                  value={selectedRole}
-                  onChange={(e) => setSelectedRole(e.target.value)}
-                        className="w-full px-4 py-2 pr-8 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                >
-                  <option value="ALL">Tutti i ruoli</option>
-                  {Object.entries(roleLabels).map(([role, label]) => (
-                    <option key={role} value={role}>{label}</option>
-                  ))}
-                </select>
-                      {selectedRole !== 'ALL' && (
-                        <button
-                          onClick={() => setSelectedRole('ALL')}
-                          className="absolute right-2 top-1/2 transform -translate-y-1/2 p-1 text-gray-400 hover:text-gray-600 transition-colors rounded-full hover:bg-gray-100"
-                          title="Rimuovi filtro ruolo"
-                        >
-                          <X className="w-3 h-3" />
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                  
                   {/* Filtro Squadre */}
                   <div>
                     <div className="flex justify-between items-center mb-2">
@@ -1965,11 +2093,11 @@ function FantacalcioAuction() {
                       <label className="block text-sm font-medium text-gray-700">
                   Filtra per Fascia {selectedFasce.size > 0 && `(${selectedFasce.size} selezionate)`}
                 </label>
-                      {(searchTerm || selectedRole !== 'ALL' || selectedFasce.size > 0 || selectedSquadre.size > 0 || showUnavailable) && (
+                      {(searchTerm || selectedRoles.size > 0 || selectedFasce.size > 0 || selectedSquadre.size > 0 || showUnavailable) && (
                         <button
                           onClick={() => {
                             setSearchTerm('');
-                            setSelectedRole('ALL');
+                            setSelectedRoles(new Set());
                             setSelectedFasce(new Set());
                             setSelectedSquadre(new Set());
                             setShowUnavailable(false);
@@ -2222,28 +2350,26 @@ function FantacalcioAuction() {
 
             {/* Rosa Ideale */}
             <div className="bg-white rounded-lg shadow-md p-4" data-section="rosa-ideale">
-              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-3">
-                <h3 className="text-lg font-bold flex items-center gap-2">
+            <div className="flex flex-row justify-between items-center mb-4 gap-3">
+              <h3 className="text-lg font-bold flex items-center gap-2">
                 <Calculator className="text-purple-500" />
                 Rosa Ideale ({myTeam.length}/{myTeam.length + totalRemainingPlayers})
               </h3>
-                
-                {/* Toggle per algoritmo avanzato */}
-                <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 w-full sm:w-auto">
-                  <span className="text-sm text-gray-600">Ottimizzazione:</span>
-                  <div className="flex gap-1 flex-wrap">
-                    <div className={`px-2 py-1 text-xs rounded-full ${
-                      apiStatus.isAvailable 
-                        ? 'bg-green-100 text-green-800 border border-green-300' 
-                        : 'bg-red-100 text-red-800 border border-red-300'
-                    }`}>
-                      {apiStatus.isAvailable ? '🟢 API Esterna Attiva' : '🔴 API Non Disponibile'}
-                    </div>
-
-
+              
+              {/* Toggle per algoritmo avanzato */}
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-gray-600">API:</span>
+                <div className="flex gap-1">
+                  <div className={`px-2 py-1 text-xs rounded-full ${
+                    apiStatus.isAvailable 
+                      ? 'bg-green-100 text-green-800 border border-green-300' 
+                      : 'bg-red-100 text-red-800 border border-red-300'
+                  }`}>
+                    {apiStatus.isAvailable ? '🟢' : '🔴'}
                   </div>
                 </div>
               </div>
+            </div>
               
               {/* Messaggio quando l'API non è disponibile */}
               {!apiStatus.isAvailable && (
@@ -2269,7 +2395,7 @@ function FantacalcioAuction() {
               )}
               
               {apiStatus.isAvailable && (
-                <div className="mb-4 text-center">
+                <div className="text-center">
                   <div className="text-2xl font-bold text-purple-600">€{idealCost}</div>
                   <div className="text-sm text-purple-500">
                     Costo Totale Rosa Ideale
@@ -2279,7 +2405,49 @@ function FantacalcioAuction() {
                       </div>
                     )}
                   </div>
-                  
+
+                  <div className="grid grid-cols-4 gap-2 mt-3 text-xs">
+                    {Object.entries(formation).map(([role, config]) => {
+                      const rolePlayers = myTeam.filter(p => p.role === role);
+                      const roleSpent = rolePlayers.reduce((sum, p) => sum + (p.paidPrice || 0), 0);
+                      const roleBudget = Math.round((config.percentage * totalBudget) / 100);
+                      const isOverBudget = roleSpent > roleBudget;
+                      const isRoleFull = rolePlayers.length >= config.min;
+                      
+                      return (
+                        <div key={role} className={`p-2 rounded-lg ${
+                          isOverBudget ? 'bg-red-50 border border-red-200' : 
+                          isRoleFull ? 'bg-green-50 border border-green-200' :
+                          'bg-gray-50'
+                        }`}>
+                          <div className={`font-bold ${
+                            isOverBudget ? 'text-red-700' : 
+                            isRoleFull ? 'text-green-700' :
+                            'text-gray-700'
+                          }`}>
+                            {roleLabels[role]}
+                          </div>
+                          <div className={isRoleFull ? 'text-green-600 font-semibold' : ''}>
+                            {rolePlayers.length}/{config.min}
+                            {isRoleFull && ' ✓'}
+                          </div>
+                          <div className={isOverBudget ? 'text-red-600 font-semibold' : 'text-gray-600'}>
+                            €{roleSpent}/€{roleBudget}
+                            {isOverBudget && (
+                              <div className="text-xs text-red-500">
+                                +€{roleSpent - roleBudget}
+                              </div>
+                            )}
+                          </div>
+                          {currentPlayer?.role === role && isRoleFull && (
+                            <div className="text-xs text-red-500 mt-1">
+                              Ruolo completo!
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
               )}
                         </div>
@@ -2316,7 +2484,7 @@ function FantacalcioAuction() {
                   )}
 
 <div className="space-y-2 ">
-                {console.log('🎯 Rendering idealTeam:', idealTeam.length, 'giocatori')}
+                {log('debug', '🎯 Rendering idealTeam:', idealTeam.length, 'giocatori')}
                 {idealTeam.length === 0 ? (
                   <div className="text-center text-gray-500 py-4">
                     <div className="text-lg font-bold mb-2">🔍 Debug Rosa Ideale</div>

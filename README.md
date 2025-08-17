@@ -23,6 +23,12 @@ Un'applicazione web moderna per gestire aste di fantacalcio con ottimizzazione a
 - Budget per ruolo
 - Analisi performance
 
+### 🗃️ **Dati di Produzione**
+- Caricamento automatico da file Excel
+- Generazione dati JSON per produzione
+- Fallback sui dati di test
+- Backup automatico con timestamp
+
 ### 🔧 **Configurazione API**
 - Configurazione personalizzabile dell'API esterna
 - Test di connettività
@@ -64,6 +70,33 @@ npm run dev
 
 ### 4. Apri nel browser
 L'applicazione sarà disponibile su `http://localhost:3000`
+
+## 🗃️ Dati di Produzione
+
+### Generazione Dati da Excel
+L'app può utilizzare dati di produzione generati dal file Excel `files/Carmy Classic 25_26.xlsx`:
+
+```bash
+# Genera i dati di produzione
+cd scripts
+node generate-production-data.js
+```
+
+### Struttura File
+- **`public/production-players.json`** - Dati di produzione (priorità massima)
+- **`public/sample-players.json`** - Dati di test (fallback)
+- **`public/production-players-[timestamp].json`** - Backup automatici
+
+### Priorità di Caricamento
+1. **`/production-players.json`** - File di produzione (priorità massima)
+2. **`/sample-players.json`** - File di test (fallback)
+3. **Dati minimi hardcoded** - Ultimo fallback
+
+### Aggiornamento Dati
+Per aggiornare i dati di produzione:
+1. Sostituisci il file Excel nella cartella `files/`
+2. Esegui `node generate-production-data.js`
+3. L'app caricherà automaticamente i nuovi dati
 
 ## 🔧 Configurazione
 

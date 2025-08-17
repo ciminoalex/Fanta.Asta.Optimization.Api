@@ -1,0 +1,98 @@
+# ========================================
+# FANTASTACALCIO AUCTION - .htaccess
+# ========================================
+# VERSIONE CON FALLBACK E DEBUG
+# ========================================
+
+# Abilita mod_rewrite
+RewriteEngine On
+
+# ========================================
+# DEBUG: Verifica se il .htaccess viene letto
+# ========================================
+# Aggiungi un header di debug per verificare se il file viene processato
+<IfModule mod_headers.c>
+    Header set X-Htaccess-Processed "YES"
+    Header set X-Debug-Info "htaccess-loaded"
+</IfModule>
+
+# ========================================
+# FORZATURA HTTPS
+# ========================================
+RewriteCond %{HTTPS} off
+RewriteRule ^(.*)$ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
+
+# ========================================
+# MIME TYPES - MULTIPLE APPROACHES
+# ========================================
+
+# APPROCCIO 1: Headers diretti
+<IfModule mod_headers.c>
+    # Forza MIME types per CSS
+    <Files "*.css">
+        Header set Content-Type "text/css"
+        Header set X-Mime-Override "text/css"
+    </Files>
+
+    # Forza MIME types per JavaScript
+    <Files "*.js">
+        Header set Content-Type "application/javascript"
+        Header set X-Mime-Override "application/javascript"
+    </Files>
+
+    # Forza MIME types per JSON
+    <Files "*.json">
+        Header set Content-Type "application/json"
+        Header set X-Mime-Override "application/json"
+    </Files>
+</IfModule>
+
+# APPROCCIO 2: MIME types con mod_mime
+<IfModule mod_mime.c>
+    AddType text/css .css
+    AddType application/javascript .js
+    AddType application/json .json
+</IfModule>
+
+# APPROCCIO 3: Handlers diretti
+<IfModule mod_mime.c>
+    AddHandler text/css .css
+    AddHandler application/javascript .js
+    AddHandler application/json .json
+</IfModule>
+
+# ========================================
+# ROUTING SPA CON PRIORITÀ ASSETS
+# ========================================
+
+# PRIORITÀ 1: Servi direttamente i file esistenti
+RewriteCond %{REQUEST_FILENAME} -f
+RewriteRule ^.*$ - [L]
+
+# PRIORITÀ 2: Servi direttamente le directory esistenti
+RewriteCond %{REQUEST_FILENAME} -d
+RewriteRule ^.*$ - [L]
+
+# PRIORITÀ 3: Se è un file asset, non redirectare
+RewriteCond %{REQUEST_URI} \.(css|js|json|png|jpg|jpeg|gif|svg|woff|woff2|ico)$ [NC]
+RewriteRule ^.*$ - [L]
+
+# PRIORITÀ 4: Se è nella cartella assets, non redirectare
+RewriteCond %{REQUEST_URI} ^/assets/ [NC]
+RewriteRule ^.*$ - [L]
+
+# PRIORITÀ 5: Altrimenti, redirect a index.html
+RewriteRule ^(.*)$ /index.html [L]
+
+# ========================================
+# FALLBACK: Se mod_headers non funziona
+# ========================================
+# Questa sezione viene eseguita solo se mod_headers non è disponibile
+<IfModule !mod_headers.c>
+    # Log dell'errore per debug
+    RewriteRule ^.*$ - [E=NO_HEADERS:1]
+</IfModule>
+
+# ========================================
+# FINE CONFIGURAZIONE
+# ========================================

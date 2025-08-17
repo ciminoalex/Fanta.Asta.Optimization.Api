@@ -4,7 +4,7 @@
 // Default configuration
 const DEFAULT_CONFIG = {
   // Base URL for the Fanta Optimizer API
-  baseUrl: 'https://fcapi.mtf-factory.com',
+  baseUrl: 'https://fcapi.mtf-factory.com/proxy.php/api',
   
   // API endpoints
   endpoints: {
