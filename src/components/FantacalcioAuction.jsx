@@ -1721,7 +1721,7 @@ function FantacalcioAuction() {
   const maxTotalBudget = useMemo(() => totalBudget * 1.1, [totalBudget]);
   const isOverTotalBudget = useMemo(() => idealCost > maxTotalBudget, [idealCost, maxTotalBudget]);
   
-  // Controlla se singoli ruoli superano il 110% del loro budget
+  // Controlla se singoli ruoli superano il loro budget
   const roleBudgetWarnings = useMemo(() => {
     const warnings = {};
     Object.keys(formation).forEach(role => {
@@ -1733,12 +1733,19 @@ function FantacalcioAuction() {
         .filter(p => p.role === role && !p.isOwned)
         .reduce((sum, p) => sum + p.displayPrice, 0);
       const roleTotal = roleSpent + roleIdeal;
-      const isOverBudget = roleTotal > roleBudget * 1.1;
+      const isOverBudget = roleTotal > roleBudget;
+      const isOver110Percent = roleTotal > roleBudget * 1.1;
       
       warnings[role] = {
         isOverBudget,
-        overAmount: Math.max(0, roleTotal - roleBudget * 1.1),
-        utilization: (roleTotal / roleBudget) * 100
+        isOver110Percent,
+        overAmount: Math.max(0, roleTotal - roleBudget),
+        over110Amount: Math.max(0, roleTotal - roleBudget * 1.1),
+        utilization: (roleTotal / roleBudget) * 100,
+        roleSpent,
+        roleIdeal,
+        roleTotal,
+        roleBudget
       };
     });
     return warnings;
@@ -2178,80 +2185,106 @@ function FantacalcioAuction() {
                 filteredPlayers.map(player => (
                   <div 
                     key={player.id}
-                    className={`p-3 border rounded-lg cursor-pointer transition-colors ${
-                      currentPlayer?.id === player.id ? 'bg-blue-50 border-blue-300' : 
+                    className={`relative flex justify-between items-center p-3 rounded-lg border cursor-pointer transition-colors hover:shadow-md ${
+                      currentPlayer?.id === player.id ? 'bg-blue-50 border-blue-300 ring-2 ring-blue-300' : 
                       player.isUnavailable ? 'bg-red-50 border-red-200 opacity-75' : 
-                      'hover:bg-gray-50'
+                      'bg-gray-50 border-gray-200 hover:bg-gray-100'
                     }`}
                     onClick={() => setCurrentPlayer(player)}
+                    title={player.isUnavailable ? "Giocatore non disponibile" : "Clicca per selezionare in asta"}
                   >
-                    <div className="flex justify-between items-start">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-1 flex-wrap">
-                          <span className="font-semibold">{player.name}</span>
-                          <span className={`px-2 py-1 rounded-full text-xs font-medium ${roleColors[player.role]}`}>
-                            {roleLabels[player.role]}
-                          </span>
-                          <FasciaBadge fascia={player.fascia} size="sm" />
-                          {player.isUnavailable && (
-                            <span className="px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-700 border border-red-200">
-                              🔒 Non Disponibile
-                            </span>
-                          )}
-                        </div>
-                        <div className="text-sm text-gray-600 mb-1">
-                          <SquadraBadge squadra={player.team} size="sm" />
-                        </div>
-                        <div className="flex items-center gap-4 text-xs text-gray-500 mb-1">
-                          <span>FMV: {player.fmv.toFixed(2)}</span>
-                          {player.gol > 0 && <span>Gol: {player.gol}</span>}
-                          {player.assist > 0 && <span>Assist: {player.assist}</span>}
-                          <span>Pres: {player.presenze}</span>
-                          {player.price > 0 && <span>Prezzo: €{player.price}</span>}
-                        </div>
-                        <div className="flex items-center gap-2 mb-1">
-                          <span className="text-xs text-gray-500">Titolarità:</span>
-                          <div className="flex gap-1">
-                            {[1, 2, 3, 4, 5].map((step) => (
-                              <div
-                                key={step}
-                                className={`w-2 h-2 rounded-full ${
-                                  step <= (player.titolarita || 0)
-                                    ? 'bg-green-500'
-                                    : 'bg-gray-200'
-                                }`}
-                                title={`Titolarità: ${player.titolarita || 0}/5`}
-                              />
-                            ))}
-                          </div>
-                        </div>
-                        {player.notes && (
-                          <div className="text-xs text-gray-500" style={{
-                            display: '-webkit-box',
-                            WebkitLineClamp: 2,
-                            WebkitBoxOrient: 'vertical',
-                            overflow: 'hidden'
-                          }}>{player.notes}</div>
-                        )}
+                    {/* Icona Titolarità - Posizionata in alto a destra */}
+                    {player.notes && (
+                      <div className="absolute top-2 right-2">
+                        {player.notes.toLowerCase().includes('titolarissimo') ? (
+                          <span className="text-red-500 text-lg" title="Titolarissimo">⭐</span>
+                        ) : player.notes.toLowerCase().includes('titolare') ? (
+                          <span className="text-orange-500 text-lg" title="Titolare">⭐</span>
+                        ) : null}
                       </div>
-                      <div className="text-right ml-4">
-                        <div className="text-lg font-bold text-green-600">€{calculatePlayerValue(player.budgetPercentage)}</div>
-                        <div className="text-xs text-gray-500">{player.budgetPercentage}% Budget</div>
-                        
-                        {/* Pulsante ripristino per giocatori non disponibili */}
+                    )}
+                    
+                    <div>
+                      {/* Prima riga: NOME GIOCATORE */}
+                      <div className="font-medium text-sm mb-1 flex items-center gap-2">
+                        {player.name}
                         {player.isUnavailable && (
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              restorePlayer(player.id);
-                            }}
-                            className="mt-2 px-2 py-1 bg-orange-500 text-white text-xs rounded hover:bg-orange-600 transition-colors"
-                            title="Ripristina giocatore disponibile"
-                          >
-                            🔄 Ripristina
-                          </button>
+                          <span className="text-xs bg-red-600 text-white px-2 py-0.5 rounded-full">
+                            🔒 NON DISPONIBILE
+                          </span>
                         )}
                       </div>
+                      
+                      {/* Seconda riga: Ruolo, Fascia, Squadra */}
+                      <div className="flex items-center gap-2 flex-wrap mb-1">
+                        <span className={`text-xs px-2 py-1 rounded-full ${roleColors[player.role]}`}>
+                          {roleLabels[player.role]}
+                        </span>
+                        <FasciaBadge fascia={player.fascia} size="xs" />
+                        <SquadraBadge squadra={player.team} size="xs" />
+                        <span className="text-xs text-gray-500">FMV: {player.fmv.toFixed(1)}</span>
+                      </div>
+                      
+                      {/* Terza riga: Titolarità */}
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="text-xs text-gray-500">Titolarità:</span>
+                        <div className="flex gap-1">
+                          {[1, 2, 3, 4, 5].map((step) => (
+                            <div
+                              key={step}
+                              className={`w-2 h-2 rounded-full ${
+                                step <= (player.titolarita || 0)
+                                  ? 'bg-green-500'
+                                  : 'bg-gray-200'
+                              }`}
+                              title={`Titolarità: ${player.titolarita || 0}/5`}
+                            />
+                          ))}
+                        </div>
+                      </div>
+                      
+                      {/* Quarta riga: Notes */}
+                      {player.notes && (
+                        <div className="text-xs text-gray-500 mb-1" style={{
+                          display: '-webkit-box',
+                          WebkitLineClamp: 2,
+                          WebkitBoxOrient: 'vertical',
+                          overflow: 'hidden'
+                        }}>{player.notes}</div>
+                      )}
+                      
+                      {/* Quinta riga: Commento */}
+                      {player.commento && (
+                        <div className="text-xs text-blue-600 italic" style={{
+                          display: '-webkit-box',
+                          WebkitLineClamp: 2,
+                          WebkitBoxOrient: 'vertical',
+                          overflow: 'hidden'
+                        }}>💬 {player.commento}</div>
+                      )}
+                    </div>
+                    
+                    <div className="text-right ml-4">
+                      <div className={`text-sm font-bold ${
+                        player.isUnavailable ? 'text-red-600' : 'text-green-600'
+                      }`}>
+                        €{calculatePlayerValue(player.budgetPercentage)}
+                      </div>
+                      <div className="text-xs text-gray-500">{player.budgetPercentage}% Budget</div>
+                      
+                      {/* Pulsante ripristino per giocatori non disponibili */}
+                      {player.isUnavailable && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            restorePlayer(player.id);
+                          }}
+                          className="mt-2 px-2 py-1 bg-orange-500 text-white text-xs rounded hover:bg-orange-600 transition-colors"
+                          title="Ripristina giocatore disponibile"
+                        >
+                          🔄 Ripristina
+                        </button>
+                      )}
                     </div>
                   </div>
                 ))
@@ -2270,21 +2303,62 @@ function FantacalcioAuction() {
                   Giocatore in Asta
                 </h3>
                 
-                <div className="mb-4">
-                  <h4 className="font-bold text-lg">{currentPlayer.name}</h4>
-                  <div className="text-gray-600">
-                    <SquadraBadge squadra={currentPlayer.team} size="md" />
+                <div className="mb-4 relative">
+                  {/* Icona Titolarità - Posizionata in alto a destra */}
+                  {currentPlayer.notes && (
+                    <div className="absolute top-0 right-0">
+                      {currentPlayer.notes.toLowerCase().includes('titolarissimo') ? (
+                        <span className="text-red-500 text-xl" title="Titolarissimo">⭐</span>
+                      ) : currentPlayer.notes.toLowerCase().includes('titolare') ? (
+                        <span className="text-orange-500 text-xl" title="Titolare">⭐</span>
+                      ) : null}
+                    </div>
+                  )}
+                  
+                  {/* Prima riga: NOME GIOCATORE */}
+                  <div className="font-medium text-lg mb-2">
+                    {currentPlayer.name}
                   </div>
-                  <div className="flex items-center gap-2 mt-2 flex-wrap">
+                  
+                  {/* Seconda riga: Ruolo, Fascia, Squadra */}
+                  <div className="flex items-center gap-2 flex-wrap mb-2">
                     <span className={`inline-block px-2 py-1 rounded-full text-xs font-medium ${roleColors[currentPlayer.role]}`}>
                       {roleLabels[currentPlayer.role]}
                     </span>
                     <FasciaBadge fascia={currentPlayer.fascia} size="md" />
-                    <span className="text-sm text-gray-500">FMV: {currentPlayer.fmv.toFixed(2)}</span>
+                    <SquadraBadge squadra={currentPlayer.team} size="md" />
+                    <span className="text-sm text-gray-500">FMV: {currentPlayer.fmv.toFixed(1)}</span>
                   </div>
+                  
+                  {/* Terza riga: Titolarità */}
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="text-xs text-gray-500">Titolarità:</span>
+                    <div className="flex gap-1">
+                      {[1, 2, 3, 4, 5].map((step) => (
+                        <div
+                          key={step}
+                          className={`w-3 h-3 rounded-full ${
+                            step <= (currentPlayer.titolarita || 0)
+                              ? 'bg-green-500'
+                              : 'bg-gray-200'
+                          }`}
+                          title={`Titolarità: ${currentPlayer.titolarita || 0}/5`}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                  
+                  {/* Quarta riga: Notes */}
                   {currentPlayer.notes && (
-                    <div className="mt-3 p-3 bg-gray-50 rounded-lg text-sm text-gray-600 border-l-4 border-blue-500">
+                    <div className="text-sm text-gray-600 mb-2 p-2 bg-gray-50 rounded border-l-4 border-blue-500">
                       {currentPlayer.notes}
+                    </div>
+                  )}
+                  
+                  {/* Quinta riga: Commento */}
+                  {currentPlayer.commento && (
+                    <div className="text-sm text-blue-600 italic mb-2 p-2 bg-blue-50 rounded border-l-4 border-blue-500">
+                      💬 {currentPlayer.commento}
                     </div>
                   )}
                 </div>
@@ -2396,7 +2470,7 @@ function FantacalcioAuction() {
               
               {apiStatus.isAvailable && (
                 <div className="text-center">
-                  <div className="text-2xl font-bold text-purple-600">€{idealCost}</div>
+                  <div className="text-2xl font-bold text-purple-600">€{Math.ceil(idealCost)}</div>
                   <div className="text-sm text-purple-500">
                     Costo Totale Rosa Ideale
                     {myTeam.length > 0 && (
@@ -2411,17 +2485,24 @@ function FantacalcioAuction() {
                       const rolePlayers = myTeam.filter(p => p.role === role);
                       const roleSpent = rolePlayers.reduce((sum, p) => sum + (p.paidPrice || 0), 0);
                       const roleBudget = Math.round((config.percentage * totalBudget) / 100);
-                      const isOverBudget = roleSpent > roleBudget;
+                      const roleIdeal = idealTeam
+                        .filter(p => p.role === role && !p.isOwned)
+                        .reduce((sum, p) => sum + p.displayPrice, 0);
+                      const roleTotal = roleSpent + roleIdeal;
+                      const isOverBudget = roleTotal > roleBudget;
+                      const isOver110Percent = roleTotal > roleBudget * 1.1;
                       const isRoleFull = rolePlayers.length >= config.min;
                       
                       return (
                         <div key={role} className={`p-2 rounded-lg ${
-                          isOverBudget ? 'bg-red-50 border border-red-200' : 
+                          isOver110Percent ? 'bg-red-50 border border-red-200' : 
+                          isOverBudget ? 'bg-orange-50 border border-orange-200' :
                           isRoleFull ? 'bg-green-50 border border-green-200' :
                           'bg-gray-50'
                         }`}>
                           <div className={`font-bold ${
-                            isOverBudget ? 'text-red-700' : 
+                            isOver110Percent ? 'text-red-700' : 
+                            isOverBudget ? 'text-orange-700' :
                             isRoleFull ? 'text-green-700' :
                             'text-gray-700'
                           }`}>
@@ -2431,11 +2512,11 @@ function FantacalcioAuction() {
                             {rolePlayers.length}/{config.min}
                             {isRoleFull && ' ✓'}
                           </div>
-                          <div className={isOverBudget ? 'text-red-600 font-semibold' : 'text-gray-600'}>
-                            €{roleSpent}/€{roleBudget}
+                          <div className={isOver110Percent ? 'text-red-600 font-semibold' : isOverBudget ? 'text-orange-600 font-semibold' : 'text-gray-600'}>
+                            €{roleSpent}/€{Math.ceil(roleIdeal)}/€{roleBudget}
                             {isOverBudget && (
-                              <div className="text-xs text-red-500">
-                                +€{roleSpent - roleBudget}
+                              <div className={`text-xs ${isOver110Percent ? 'text-red-500' : 'text-orange-500'}`}>
+                                +€{Math.ceil(roleTotal - roleBudget)}
                               </div>
                             )}
                           </div>
@@ -2456,7 +2537,7 @@ function FantacalcioAuction() {
                   
                 {idealCost > totalBudget && (
                   <div className="text-xs text-red-500 mt-1">
-                    ⚠️ Supera il budget totale di €{idealCost - totalBudget}
+                    ⚠️ Supera il budget totale di €{Math.ceil(idealCost - totalBudget)}
                     {isOverTotalBudget && (
                       <div className="font-bold text-red-600">
                         🚫 ROSA IDEALE NON VALIDA (supera 110% del budget)
@@ -2465,18 +2546,24 @@ function FantacalcioAuction() {
                   </div>
                 )}
                   
-                  {/* Avvisi per ruoli che sforano il 110% */}
+                  {/* Avvisi per ruoli che sforano il budget */}
                   {Object.entries(roleBudgetWarnings).some(([role, warning]) => warning.isOverBudget) && (
                     <div className="mt-2 p-2 bg-red-50 rounded-lg border border-red-200">
                       <div className="text-xs text-red-700 font-medium mb-1">
-                        ⚠️ Ruoli che superano il 110% del budget:
+                        ⚠️ Ruoli che superano il budget:
                       </div>
                       <div className="text-xs text-red-600 space-y-1">
                         {Object.entries(roleBudgetWarnings)
                           .filter(([role, warning]) => warning.isOverBudget)
                           .map(([role, warning]) => (
                             <div key={role}>
-                              • {roleLabels[role]}: {warning.utilization.toFixed(0)}% (sfora di €{warning.overAmount.toFixed(0)})
+                              • {roleLabels[role]}: {warning.utilization.toFixed(0)}% (sfora di €{Math.ceil(warning.overAmount)})
+                              {warning.isOver110Percent && (
+                                <span className="text-red-600 font-semibold ml-1">⚠️ Supera 110%</span>
+                              )}
+                              <div className="text-xs text-gray-500 ml-2">
+                                Speso: €{warning.roleSpent} | Ideale: €{Math.ceil(warning.roleIdeal)} | Budget: €{warning.roleBudget} | Totale: €{Math.ceil(warning.roleTotal)}
+                              </div>
                             </div>
                           ))}
                       </div>
@@ -2502,7 +2589,7 @@ function FantacalcioAuction() {
                     {idealTeam.map(player => (
                     <div 
                       key={player.id} 
-                      className={`flex justify-between items-center p-3 rounded-lg border cursor-pointer transition-colors hover:shadow-md ${
+                      className={`relative flex justify-between items-center p-3 rounded-lg border cursor-pointer transition-colors hover:shadow-md ${
                         player.isOwned 
                           ? 'bg-green-50 border-green-200 ring-2 ring-green-300 hover:bg-green-100' 
                           : player.selectionPhase === 'optimized'
@@ -2524,6 +2611,17 @@ function FantacalcioAuction() {
                       }}
                       title={player.isOwned ? "Giocatore già acquistato" : "Clicca per selezionare in asta"}
                     >
+                      {/* Icona Titolarità - Posizionata in alto a destra */}
+                      {player.notes && (
+                        <div className="absolute top-2 right-2">
+                          {player.notes.toLowerCase().includes('titolarissimo') ? (
+                            <span className="text-red-500 text-lg" title="Titolarissimo">⭐</span>
+                          ) : player.notes.toLowerCase().includes('titolare') ? (
+                            <span className="text-orange-500 text-lg" title="Titolare">⭐</span>
+                          ) : null}
+                        </div>
+                      )}
+                      
                       <div>
                         <div className="font-medium text-sm mb-1 flex items-center gap-2">
                           {player.name}
@@ -2564,6 +2662,14 @@ function FantacalcioAuction() {
                             WebkitBoxOrient: 'vertical',
                             overflow: 'hidden'
                           }}>{player.notes}</div>
+                        )}
+                        {player.commento && (
+                          <div className="text-xs text-blue-600 italic mt-1" style={{
+                            display: '-webkit-box',
+                            WebkitLineClamp: 2,
+                            WebkitBoxOrient: 'vertical',
+                            overflow: 'hidden'
+                          }}>💬 {player.commento}</div>
                         )}
                     </div>
                     <div className={`text-sm font-bold ${
@@ -2645,9 +2751,22 @@ function FantacalcioAuction() {
               ) : (
                 <div className="space-y-2 ">
                   {myTeam.map(player => (
-                    <div key={player.id} className="flex justify-between items-center p-3 bg-gray-50 rounded-lg border border-gray-200">
+                    <div key={player.id} className="relative flex justify-between items-center p-3 bg-gray-50 rounded-lg border border-gray-200">
+                      {/* Icona Titolarità - Posizionata in alto a destra */}
+                      {player.notes && (
+                        <div className="absolute top-2 right-2">
+                          {player.notes.toLowerCase().includes('titolarissimo') ? (
+                            <span className="text-red-500 text-lg" title="Titolarissimo">⭐</span>
+                          ) : player.notes.toLowerCase().includes('titolare') ? (
+                            <span className="text-orange-500 text-lg" title="Titolare">⭐</span>
+                          ) : null}
+                        </div>
+                      )}
+                      
                       <div className="flex-1">
-                        <div className="font-medium text-sm mb-1">{player.name}</div>
+                        <div className="font-medium text-sm mb-1 flex items-center gap-2">
+                          {player.name}
+                        </div>
                         <div className="flex items-center gap-2 flex-wrap">
                           <span className={`text-xs px-2 py-1 rounded-full ${roleColors[player.role]}`}>
                             {roleLabels[player.role]}
@@ -2673,6 +2792,26 @@ function FantacalcioAuction() {
                             ))}
                           </div>
                         </div>
+                        
+                        {/* Quarta riga: Notes */}
+                        {player.notes && (
+                          <div className="text-xs text-gray-500 mt-1" style={{
+                            display: '-webkit-box',
+                            WebkitLineClamp: 2,
+                            WebkitBoxOrient: 'vertical',
+                            overflow: 'hidden'
+                          }}>{player.notes}</div>
+                        )}
+                        
+                        {/* Quinta riga: Commento */}
+                        {player.commento && (
+                          <div className="text-xs text-blue-600 italic mt-1" style={{
+                            display: '-webkit-box',
+                            WebkitLineClamp: 2,
+                            WebkitBoxOrient: 'vertical',
+                            overflow: 'hidden'
+                          }}>💬 {player.commento}</div>
+                        )}
                       </div>
                       <div className="flex items-center gap-3">
                         <div className="text-sm font-bold text-green-600">€{player.paidPrice}</div>
