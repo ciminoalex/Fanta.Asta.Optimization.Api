@@ -19,7 +19,7 @@ function generateProductionData() {
     // Leggi il file Excel
     const workbook = XLSX.readFile(excelFilePath);
     
-    console.log('📊 Fogli disponibili nel file Excel:');
+    console.log('📊 Fogli disponibili nel file Excel:'); // Commento per debug
     console.log(workbook.SheetNames);
     
     let allPlayers = [];
